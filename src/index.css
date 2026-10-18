@@ -1,0 +1,151 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-workbench: #fff8f1;
+    --text-main: #2b1d14;
+    --copper: #5c4033;
+    --copper-dark: #382419;
+    --mint: #00f0b5;
+    --mint-glow: rgba(0, 240, 181, 0.4);
+    --amber: #f59e0b;
+    --amber-glow: rgba(245, 158, 11, 0.4);
+    --berry: #a34063;
+    --cyan: #38bdf8;
+    --tape-bg: rgba(227, 208, 185, 0.85);
+    --tape-yellow: rgba(254, 240, 138, 0.82);
+    --tape-pink: rgba(254, 205, 211, 0.85);
+    --tape-mint: rgba(167, 243, 208, 0.85);
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+    background-color: var(--bg-workbench);
+    color: var(--text-main);
+    overflow-x: hidden;
+  }
+}
+
+/* Custom workbench cutting mat grid pattern */
+.bg-grid-mat {
+  background-size: 24px 24px;
+  background-image: 
+    linear-gradient(to right, rgba(92, 64, 51, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(92, 64, 51, 0.08) 1px, transparent 1px);
+}
+
+.bg-grid-mat-dark {
+  background-size: 24px 24px;
+  background-image: 
+    linear-gradient(to right, rgba(0, 240, 181, 0.12) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 240, 181, 0.12) 1px, transparent 1px);
+}
+
+/* Astrodither pixel dither pattern */
+.bg-dither-stars {
+  background-image: radial-gradient(rgba(0, 240, 181, 0.25) 1px, transparent 1px), radial-gradient(rgba(56, 189, 248, 0.2) 1px, #0a0c16 1px);
+  background-size: 20px 20px, 40px 40px;
+  background-position: 0 0, 20px 20px;
+}
+
+/* CRT Scanline effect */
+.crt-overlay::after {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0; left: 0; bottom: 0; right: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+  z-index: 40;
+  background-size: 100% 3px, 3px 100%;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+/* Tactile 3D hard shadows */
+.shadow-retro {
+  box-shadow: 4px 4px 0px #5c4033;
+}
+
+.shadow-retro-lg {
+  box-shadow: 6px 6px 0px #5c4033;
+}
+
+.shadow-retro-sm {
+  box-shadow: 2px 2px 0px #5c4033;
+}
+
+.shadow-retro-mint {
+  box-shadow: 4px 4px 0px #00f0b5;
+}
+
+.shadow-retro-amber {
+  box-shadow: 4px 4px 0px #f59e0b;
+}
+
+/* Washi Tape Rip Edge Styles */
+.tape-rip-left {
+  clip-path: polygon(
+    0% 0%, 100% 0%, 100% 100%, 0% 100%,
+    2% 85%, 0% 70%, 2% 55%, 0% 40%, 2% 25%, 0% 10%
+  );
+}
+
+.tape-rip-right {
+  clip-path: polygon(
+    0% 0%, 100% 0%, 98% 15%, 100% 30%, 98% 45%, 100% 60%, 98% 75%, 100% 90%, 98% 100%,
+    0% 100%
+  );
+}
+
+.tape-rip-both {
+  clip-path: polygon(
+    0% 0%, 100% 0%, 98% 15%, 100% 30%, 98% 45%, 100% 60%, 98% 75%, 100% 90%, 98% 100%,
+    0% 100%, 2% 85%, 0% 70%, 2% 55%, 0% 40%, 2% 25%, 0% 10%
+  );
+}
+
+/* Handwritten font utility */
+.font-hand {
+  font-family: 'Gaegu', cursive, sans-serif;
+}
+
+.font-pixel {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Tread roll animation */
+@keyframes treadRoll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-16px); }
+}
+
+.animate-tread {
+  animation: treadRoll 0.8s linear infinite;
+}
+
+/* Antenna wobble */
+@keyframes antennaBoing {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-8deg) scaleY(1.05); }
+  50% { transform: rotate(6deg) scaleY(0.95); }
+  75% { transform: rotate(-3deg); }
+}
+
+.animate-boing {
+  transform-origin: bottom center;
+  animation: antennaBoing 0.6s ease-in-out;
+}
+
+/* Pulsing LED glow */
+@keyframes ledPulse {
+  0%, 100% { opacity: 0.95; filter: drop-shadow(0 0 6px currentColor); }
+  50% { opacity: 0.7; filter: drop-shadow(0 0 2px currentColor); }
+}
+
+.animate-led {
+  animation: ledPulse 2s ease-in-out infinite;
+}

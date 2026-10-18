@@ -1,0 +1,351 @@
+import { useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
+import { sounds } from '../audio/soundEffects'
+import { StickyNote } from './StickyNote'
+import { Heart, Users, Pin, Stamp } from 'lucide-react'
+import confetti from 'canvas-confetti'
+
+interface PinnedNote {
+  id: string
+  author: string
+  text: string
+  color: 'cream' | 'yellow' | 'pink' | 'mint' | 'cyan'
+  rotation: number
+  timestamp: string
+}
+
+const DEFAULT_NOTES: PinnedNote[] = [
+  {
+    id: 'n1',
+    author: 'Ada Lovelace Fan',
+    text: 'Unit-B04 is the cutest mechanical baby on the entire web! Keep tinkering! 🤖✨',
+    color: 'yellow',
+    rotation: -2,
+    timestamp: 'Oct 18',
+  },
+  {
+    id: 'n2',
+    author: 'CircuitMouse',
+    text: 'Squeak! I brought an extra 330-ohm resistor for your backpack dock!',
+    color: 'mint',
+    rotation: 1.5,
+    timestamp: 'Oct 18',
+  },
+  {
+    id: 'n3',
+    author: 'haX.baby Judge',
+    text: 'Top tier tactile feedback & Web Audio chimes! The rattle physics are pure joy.',
+    color: 'pink',
+    rotation: -1,
+    timestamp: 'Oct 18',
+  },
+]
+
+export function TactileWorkbench() {
+  const [visitorCount, setVisitorCount] = useState(4281)
+  const [hasLiked, setHasLiked] = useState(false)
+  const [pinnedNotes, setPinnedNotes] = useState<PinnedNote[]>(DEFAULT_NOTES)
+  const [authorInput, setAuthorInput] = useState('')
+  const [textInput, setTextInput] = useState('')
+  const [selectedColor, setSelectedColor] = useState<'cream' | 'yellow' | 'pink' | 'mint'>('yellow')
+
+  // Load and increment visitor counter in localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedCount = localStorage.getItem('cutobot_visitors')
+      let count = savedCount ? parseInt(savedCount, 10) : 4281
+      count += 1
+      setVisitorCount(count)
+      localStorage.setItem('cutobot_visitors', String(count))
+
+      const savedNotes = localStorage.getItem('cutobot_guestbook')
+      if (savedNotes) {
+        try {
+          setPinnedNotes(JSON.parse(savedNotes))
+        } catch {
+          // Fallback
+        }
+      }
+    }
+  }, [])
+
+  const handleGiveHighFive = (e: React.MouseEvent) => {
+    sounds.playFanfare()
+    setVisitorCount((c) => {
+      const updated = c + 1
+      localStorage.setItem('cutobot_visitors', String(updated))
+      return updated
+    })
+    setHasLiked(true)
+
+    confetti({
+      particleCount: 50,
+      spread: 70,
+      origin: {
+        x: e.clientX / window.innerWidth,
+        y: e.clientY / window.innerHeight,
+      },
+      colors: ['#f43f5e', '#00f0b5', '#f59e0b', '#38bdf8'],
+    })
+  }
+
+  const handleAddNote = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!textInput.trim()) return
+
+    sounds.playClick(900)
+    const newNote: PinnedNote = {
+      id: String(Date.now()),
+      author: authorInput.trim() || 'Anonymous Tinker',
+      text: textInput.trim(),
+      color: selectedColor,
+      rotation: (Math.random() - 0.5) * 4,
+      timestamp: 'Just now',
+    }
+
+    const updated = [newNote, ...pinnedNotes]
+    setPinnedNotes(updated)
+    localStorage.setItem('cutobot_guestbook', JSON.stringify(updated))
+
+    setTextInput('')
+    setAuthorInput('')
+
+    confetti({
+      particleCount: 25,
+      spread: 50,
+      colors: ['#00f0b5', '#f59e0b'],
+    })
+  }
+
+  return (
+    <section id="workbench" className="py-16 px-4 max-w-6xl mx-auto">
+      {/* Section Header with Oversized Typography */}
+      <div className="text-center mb-12">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          whileInView={{ opacity: 1, scale: 1 }}
+          viewport={{ once: true }}
+          className="inline-flex items-center gap-2 bg-[#fef08a] border-2 border-[#854d0e] px-3.5 py-1 rounded-full text-xs font-mono font-bold text-[#854d0e] shadow-[2px_2px_0px_#854d0e] mb-3"
+        >
+          <Pin className="w-3.5 h-3.5 text-[#d97706]" />
+          <span>Tactile Workbench • Sweet-Tape Inspired</span>
+        </motion.div>
+
+        <motion.h2
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="font-extrabold text-[#2b1d14] tracking-tight"
+          style={{ fontSize: 'clamp(2.5rem, 6vw, 4.5rem)' }}
+        >
+          COMMUNITY PEGBOARD.
+        </motion.h2>
+
+        <p className="text-sm sm:text-base text-[#5c4033] font-mono mt-1 max-w-xl mx-auto">
+          Leave a sweet-tape note for Bolt and watch live workshop visitors tick up in real time!
+        </p>
+      </div>
+
+      {/* TOP ROW: LIVE VISITOR COUNTER & STICKER DECK */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mb-12 items-stretch">
+        {/* RETRO 7-SEGMENT / MECHANICAL ODOMETER VISITOR COUNTER */}
+        <motion.div
+          initial={{ opacity: 0, y: 30, rotate: -1 }}
+          whileInView={{ opacity: 1, y: 0, rotate: 0 }}
+          viewport={{ once: true, margin: '-50px' }}
+          transition={{ duration: 0.6 }}
+          className="md:col-span-6 bg-[#2b1d14] border-4 border-[#5c4033] rounded-2xl p-6 shadow-[6px_6px_0px_#5c4033] flex flex-col justify-between text-white relative overflow-hidden"
+        >
+          {/* Washi tape on counter */}
+          <div className="absolute -top-3 left-6 px-4 py-0.5 bg-[#fef08a] border border-[#a16207]/40 shadow-xs rotate-[-1deg] text-[10px] font-mono font-bold uppercase text-[#854d0e]">
+            Unit-B04 Telemetry
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-mono text-[#00f0b5] uppercase tracking-widest flex items-center gap-1.5">
+                <Users className="w-4 h-4" /> Live Workshop Visitors
+              </span>
+              <span className="w-2.5 h-2.5 rounded-full bg-[#10b981] animate-ping" />
+            </div>
+
+            {/* Retro Number Tumbler */}
+            <div className="flex items-center justify-center gap-2 my-4">
+              {String(visitorCount)
+                .padStart(6, '0')
+                .split('')
+                .map((digit, i) => (
+                  <div
+                    key={i}
+                    className="w-10 sm:w-12 h-14 bg-gradient-to-b from-[#18181b] via-[#09090b] to-[#18181b] border-2 border-[#5c4033] rounded-lg shadow-inner flex items-center justify-center font-mono font-extrabold text-2xl sm:text-3xl text-[#00f0b5] relative overflow-hidden"
+                  >
+                    {/* Horizontal split divider like flip clock */}
+                    <div className="absolute top-1/2 left-0 right-0 h-px bg-[#27272a]" />
+                    <span className="z-10 drop-shadow-[0_0_8px_#00f0b5]">
+                      {digit}
+                    </span>
+                  </div>
+                ))}
+            </div>
+          </div>
+
+          {/* High-Five Action */}
+          <div className="flex items-center justify-between pt-4 border-t border-zinc-700/60">
+            <span className="text-[11px] font-mono text-zinc-400">
+              {hasLiked ? '🎉 You high-fived Bolt!' : 'Give Bolt a high-five!'}
+            </span>
+            <button
+              onClick={handleGiveHighFive}
+              className="px-4 py-2 bg-[#f43f5e] hover:bg-[#e11d48] text-white border-2 border-[#881337] rounded-lg font-mono text-xs font-bold uppercase shadow-[2px_2px_0px_#881337] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none flex items-center gap-1.5 transition-all"
+            >
+              <Heart className="w-3.5 h-3.5 fill-current" />
+              <span>High-Five (+1)</span>
+            </button>
+          </div>
+        </motion.div>
+
+        {/* TACTILE PEELABLE STICKER MAT */}
+        <motion.div
+          initial={{ opacity: 0, y: 30, rotate: 1 }}
+          whileInView={{ opacity: 1, y: 0, rotate: 0 }}
+          viewport={{ once: true, margin: '-50px' }}
+          transition={{ duration: 0.6, delay: 0.15 }}
+          className="md:col-span-6 bg-[#fffaf3] border-4 border-[#5c4033] rounded-2xl p-6 shadow-[6px_6px_0px_#5c4033] flex flex-col justify-between"
+        >
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-mono font-bold text-[#5c4033] uppercase tracking-wider flex items-center gap-1.5">
+                <Stamp className="w-4 h-4 text-[#a34063]" /> Workshop Sticker Collection
+              </span>
+              <span className="text-[10px] font-mono text-[#a34063] bg-pink-100 border border-pink-300 px-2 py-0.5 rounded-full">
+                Sweet-Tape Edition
+              </span>
+            </div>
+
+            <div className="rounded-xl border-2 border-dashed border-[#5c4033]/40 p-2 bg-[#fdf5e6] overflow-hidden">
+              <img
+                src="/assets/cutobot_stickers.jpg"
+                alt="Die-cut sticker sheet with CutoBot, Music Box, and Sparkle Rattle"
+                className="w-full h-auto object-cover rounded-lg shadow-inner"
+              />
+            </div>
+          </div>
+
+          <div className="mt-3 text-[11px] font-mono text-[#5c4033]/80 flex items-center justify-between">
+            <span>✨ Tactile die-cut enamel finishes</span>
+            <span className="font-bold text-[#a34063]">haX.baby 2026</span>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* COMMUNITY GUESTBOOK PEGBOARD */}
+      <div className="relative bg-[#f5e8d3] border-4 border-[#5c4033] rounded-2xl p-6 sm:p-8 shadow-[8px_8px_0px_#5c4033]">
+        {/* Pegboard Hole Matrix Pattern */}
+        <div className="absolute inset-0 opacity-15 pointer-events-none bg-[radial-gradient(#5c4033_2px,transparent_2px)] [background-size:24px_24px]" />
+
+        <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          {/* Note Submission Form */}
+          <div className="lg:col-span-5 bg-[#fffaf3] border-2 border-[#5c4033] rounded-xl p-5 shadow-[4px_4px_0px_#5c4033]">
+            {/* Washi tape header */}
+            <div className="w-24 h-4 bg-[#fde047]/80 border border-[#a16207]/30 mx-auto -mt-7 mb-3 rotate-1" />
+
+            <h3 className="font-bold text-base text-[#5c4033] mb-1">
+              Tape a Note to Bolt's Board
+            </h3>
+            <p className="text-xs text-[#5c4033]/70 font-mono mb-4">
+              Write a message or cheer for the baby robot!
+            </p>
+
+            <form onSubmit={handleAddNote} className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-mono font-bold text-[#5c4033] mb-1">
+                  Your Nickname / Handle:
+                </label>
+                <input
+                  type="text"
+                  maxLength={30}
+                  placeholder="e.g. TinkerBelle, SolderKing"
+                  value={authorInput}
+                  onChange={(e) => setAuthorInput(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-lg border-2 border-[#5c4033] bg-white font-mono text-xs text-[#2b1d14] focus:outline-none focus:ring-2 focus:ring-[#00f0b5]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-mono font-bold text-[#5c4033] mb-1">
+                  Message:
+                </label>
+                <textarea
+                  required
+                  maxLength={140}
+                  rows={3}
+                  placeholder="Leave a sweet note or circuit advice..."
+                  value={textInput}
+                  onChange={(e) => setTextInput(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-lg border-2 border-[#5c4033] bg-white font-sans text-xs text-[#2b1d14] focus:outline-none focus:ring-2 focus:ring-[#00f0b5]"
+                />
+              </div>
+
+              {/* Color Picker */}
+              <div>
+                <label className="block text-[11px] font-mono font-bold text-[#5c4033] mb-1">
+                  Sticky Note Color:
+                </label>
+                <div className="flex gap-2">
+                  {(['yellow', 'mint', 'pink', 'cream'] as const).map((c) => (
+                    <button
+                      type="button"
+                      key={c}
+                      onClick={() => {
+                        sounds.playClick(900)
+                        setSelectedColor(c)
+                      }}
+                      className={`w-7 h-7 rounded border-2 border-[#5c4033] transition-transform ${
+                        c === 'yellow'
+                          ? 'bg-[#fef08a]'
+                          : c === 'mint'
+                          ? 'bg-[#a7f3d0]'
+                          : c === 'pink'
+                          ? 'bg-[#fbcfe8]'
+                          : 'bg-[#fffaf3]'
+                      } ${selectedColor === c ? 'scale-115 ring-2 ring-[#5c4033]' : 'hover:scale-105'}`}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-2 bg-[#00f0b5] hover:bg-[#00d8a3] text-[#2b1d14] font-mono text-xs font-bold uppercase rounded-lg border-2 border-[#5c4033] shadow-[3px_3px_0px_#5c4033] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none flex items-center justify-center gap-1.5 transition-all mt-2"
+              >
+                <Pin className="w-3.5 h-3.5" />
+                <span>Tape Note to Board</span>
+              </button>
+            </form>
+          </div>
+
+          {/* Pegboard Pinned Sticky Notes Grid */}
+          <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {pinnedNotes.map((note) => (
+              <StickyNote
+                key={note.id}
+                title={note.author}
+                color={note.color}
+                rotation={note.rotation}
+                tapeColor="kraft"
+                className="transition-transform hover:scale-103"
+              >
+                <p className="font-hand text-lg leading-tight text-[#2b1d14]">
+                  "{note.text}"
+                </p>
+                <div className="mt-2 text-[10px] font-mono text-[#5c4033]/60 text-right">
+                  {note.timestamp}
+                </div>
+              </StickyNote>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
