@@ -28,6 +28,27 @@ export interface DbStickyNote {
 const DEFAULT_NOTES: DbStickyNote[] = []
 
 /**
+ * Verify whether Supabase connection and tables are ready
+ */
+export async function checkDatabaseHealth(): Promise<'connected' | 'missing_tables' | 'offline'> {
+  if (!supabase) return 'offline'
+  try {
+    const { error } = await supabase.from('sticky_notes').select('id').limit(1)
+    if (error) {
+      if (error.code === 'PGRST205' || error.message?.includes('schema cache') || error.message?.includes('not find')) {
+        return 'missing_tables'
+      }
+      console.warn('Supabase health check error:', error)
+      return 'offline'
+    }
+    return 'connected'
+  } catch (err) {
+    console.warn('Supabase unreachable:', err)
+    return 'offline'
+  }
+}
+
+/**
  * Fetch and increment the global view count starting from 0.
  * If Supabase is connected, calls the atomic increment_views RPC or direct table increment.
  * Otherwise falls back to localStorage.
@@ -53,13 +74,13 @@ export async function getAndIncrementViewCount(): Promise<number> {
     }
 
     // 2. Fallback: try direct select & increment from site_stats table
-    const { data: stats } = await supabase
+    const { data: stats, error: statsErr } = await supabase
       .from('site_stats')
       .select('view_count')
       .eq('id', 'global')
       .single()
 
-    if (stats) {
+    if (!statsErr && stats) {
       const current = typeof stats.view_count === 'number' ? stats.view_count : 0
       const newCount = current + 1
       await supabase
@@ -67,13 +88,15 @@ export async function getAndIncrementViewCount(): Promise<number> {
         .update({ view_count: newCount, updated_at: new Date().toISOString() })
         .eq('id', 'global')
       return newCount
-    } else {
-      // Create initial row with 1
+    } else if (statsErr?.code === 'PGRST116') {
+      // Row doesn't exist, create initial row
       await supabase
         .from('site_stats')
         .insert({ id: 'global', view_count: 1, high_fives: 0 })
       return 1
     }
+
+    return fallbackCount()
   } catch (err) {
     console.warn('Supabase view count error, falling back to local:', err)
     return fallbackCount()
@@ -111,6 +134,9 @@ export async function fetchStickyNotes(): Promise<DbStickyNote[]> {
       .limit(50)
 
     if (error || !data) {
+      if (error) {
+        console.warn('Supabase sticky_notes query failed:', error.message)
+      }
       return fallbackNotes()
     }
 
@@ -133,7 +159,7 @@ export async function fetchStickyNotes(): Promise<DbStickyNote[]> {
 /**
  * Create a new sticky note in Supabase or localStorage.
  */
-export async function insertStickyNote(note: Omit<DbStickyNote, 'id'>): Promise<DbStickyNote> {
+export async function insertStickyNote(note: Omit<DbStickyNote, 'id'>): Promise<{ note: DbStickyNote; error?: string }> {
   const localNote: DbStickyNote = {
     ...note,
     id: `note-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -152,7 +178,7 @@ export async function insertStickyNote(note: Omit<DbStickyNote, 'id'>): Promise<
   }
 
   if (!supabase) {
-    return localNote
+    return { note: localNote }
   }
 
   try {
@@ -168,22 +194,24 @@ export async function insertStickyNote(note: Omit<DbStickyNote, 'id'>): Promise<
       .single()
 
     if (error || !data) {
-      console.warn('Could not persist to Supabase, used local:', error)
-      return localNote
+      console.error('Could not persist note to Supabase:', error)
+      return { note: localNote, error: error?.message || 'Database insert failed' }
     }
 
     return {
-      id: String(data.id),
-      author: data.author,
-      text: data.text,
-      color: data.color,
-      rotation: data.rotation,
-      timestamp: 'Just now',
-      created_at: data.created_at,
+      note: {
+        id: String(data.id),
+        author: data.author,
+        text: data.text,
+        color: data.color,
+        rotation: data.rotation,
+        timestamp: 'Just now',
+        created_at: data.created_at,
+      },
     }
   } catch (err) {
-    console.warn('Supabase insert note error:', err)
-    return localNote
+    console.error('Supabase insert note error:', err)
+    return { note: localNote, error: String(err) }
   }
 }
 

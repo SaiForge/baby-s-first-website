@@ -7,6 +7,7 @@ import confetti from 'canvas-confetti'
 import {
   isSupabaseConfigured,
   supabase,
+  checkDatabaseHealth,
   getAndIncrementViewCount,
   fetchStickyNotes,
   insertStickyNote,
@@ -22,19 +23,27 @@ export function TactileWorkbench() {
   const [textInput, setTextInput] = useState('')
   const [selectedColor, setSelectedColor] = useState<'cream' | 'yellow' | 'pink' | 'mint'>('yellow')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [dbHealth, setDbHealth] = useState<'checking' | 'connected' | 'missing_tables' | 'offline'>('checking')
+  const [dbError, setDbError] = useState<string | null>(null)
 
-  // Initialize view count and load persistent notes starting from 0
+  // Initialize view count, database health, and load persistent notes
   useEffect(() => {
     let mounted = true
 
     async function initWorkbench() {
-      // 1. Fetch & increment real view count
+      // 1. Verify actual database connectivity & tables
+      const health = await checkDatabaseHealth()
+      if (mounted) {
+        setDbHealth(health)
+      }
+
+      // 2. Fetch & increment real view count
       const count = await getAndIncrementViewCount()
       if (mounted) {
         setVisitorCount(count)
       }
 
-      // 2. Fetch persistent notes
+      // 3. Fetch persistent notes
       const notes = await fetchStickyNotes()
       if (mounted) {
         setPinnedNotes(notes)
@@ -115,7 +124,13 @@ export function TactileWorkbench() {
     }
 
     // Insert to Supabase (or fallback to local storage)
-    const savedNote = await insertStickyNote(notePayload)
+    const { note: savedNote, error } = await insertStickyNote(notePayload)
+
+    if (error) {
+      setDbError(error)
+    } else {
+      setDbError(null)
+    }
 
     setPinnedNotes((prev) => [savedNote, ...prev.filter((n) => n.id !== savedNote.id)])
     setTextInput('')
@@ -158,17 +173,30 @@ export function TactileWorkbench() {
         </p>
 
         {/* Database Live Connection Status Badge */}
-        <div className="mt-3 inline-flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-mono font-semibold">
-          {isSupabaseConfigured ? (
-            <div className="inline-flex items-center gap-1.5 text-emerald-700 bg-emerald-50 border-emerald-300">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <Database className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Supabase Postgres Live • Realtime Synchronized</span>
-            </div>
-          ) : (
-            <div className="inline-flex items-center gap-1.5 text-amber-800 bg-amber-50 border-amber-300">
-              <Radio className="w-3.5 h-3.5 text-amber-600 animate-spin" />
-              <span>Offline/Demo Mode (Ready for Supabase credentials)</span>
+        <div className="mt-3 flex flex-col items-center gap-2">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-xs font-mono font-semibold shadow-xs">
+            {dbHealth === 'connected' ? (
+              <div className="inline-flex items-center gap-1.5 text-emerald-700 bg-emerald-50 border-emerald-300">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <Database className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Supabase Postgres Live • Realtime Synchronized</span>
+              </div>
+            ) : dbHealth === 'missing_tables' ? (
+              <div className="inline-flex items-center gap-1.5 text-amber-900 bg-amber-100 border-amber-300">
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                <span>⚠️ Connected to Supabase, but Tables Not Created Yet! (Run schema.sql in SQL Editor)</span>
+              </div>
+            ) : (
+              <div className="inline-flex items-center gap-1.5 text-amber-800 bg-amber-50 border-amber-300">
+                <Radio className="w-3.5 h-3.5 text-amber-600 animate-spin" />
+                <span>Offline/Demo Mode (Ready for Supabase)</span>
+              </div>
+            )}
+          </div>
+
+          {dbError && (
+            <div className="text-[11px] font-mono text-red-600 bg-red-50 border border-red-200 px-3 py-1 rounded-lg">
+              Note saved locally only ({dbError}). Create tables in Supabase to sync globally!
             </div>
           )}
         </div>
