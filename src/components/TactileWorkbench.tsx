@@ -2,70 +2,63 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { sounds } from '../audio/soundEffects'
 import { StickyNote } from './StickyNote'
-import { Heart, Users, Pin, Stamp } from 'lucide-react'
+import { Heart, Users, Pin, Stamp, Database, Radio } from 'lucide-react'
 import confetti from 'canvas-confetti'
-
-interface PinnedNote {
-  id: string
-  author: string
-  text: string
-  color: 'cream' | 'yellow' | 'pink' | 'mint' | 'cyan'
-  rotation: number
-  timestamp: string
-}
-
-const DEFAULT_NOTES: PinnedNote[] = [
-  {
-    id: 'n1',
-    author: 'Ada Lovelace Fan',
-    text: 'Unit-B04 is the cutest mechanical baby on the entire web! Keep tinkering! 🤖✨',
-    color: 'yellow',
-    rotation: -2,
-    timestamp: 'Oct 18',
-  },
-  {
-    id: 'n2',
-    author: 'CircuitMouse',
-    text: 'Squeak! I brought an extra 330-ohm resistor for your backpack dock!',
-    color: 'mint',
-    rotation: 1.5,
-    timestamp: 'Oct 18',
-  },
-  {
-    id: 'n3',
-    author: 'haX.baby Judge',
-    text: 'Top tier tactile feedback & Web Audio chimes! The rattle physics are pure joy.',
-    color: 'pink',
-    rotation: -1,
-    timestamp: 'Oct 18',
-  },
-]
+import {
+  isSupabaseConfigured,
+  getAndIncrementViewCount,
+  fetchStickyNotes,
+  insertStickyNote,
+  subscribeToRealtimeNotes,
+  type DbStickyNote,
+} from '../lib/supabase'
 
 export function TactileWorkbench() {
   const [visitorCount, setVisitorCount] = useState(4281)
   const [hasLiked, setHasLiked] = useState(false)
-  const [pinnedNotes, setPinnedNotes] = useState<PinnedNote[]>(DEFAULT_NOTES)
+  const [pinnedNotes, setPinnedNotes] = useState<DbStickyNote[]>([])
   const [authorInput, setAuthorInput] = useState('')
   const [textInput, setTextInput] = useState('')
   const [selectedColor, setSelectedColor] = useState<'cream' | 'yellow' | 'pink' | 'mint'>('yellow')
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Load and increment visitor counter in localStorage
+  // Initialize view count and load persistent notes
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedCount = localStorage.getItem('cutobot_visitors')
-      let count = savedCount ? parseInt(savedCount, 10) : 4281
-      count += 1
-      setVisitorCount(count)
-      localStorage.setItem('cutobot_visitors', String(count))
+    let mounted = true
 
-      const savedNotes = localStorage.getItem('cutobot_guestbook')
-      if (savedNotes) {
-        try {
-          setPinnedNotes(JSON.parse(savedNotes))
-        } catch {
-          // Fallback
-        }
+    async function initWorkbench() {
+      // 1. Fetch & increment real view count
+      const count = await getAndIncrementViewCount()
+      if (mounted) {
+        setVisitorCount(count)
       }
+
+      // 2. Fetch persistent notes
+      const notes = await fetchStickyNotes()
+      if (mounted) {
+        setPinnedNotes(notes)
+      }
+    }
+
+    initWorkbench()
+
+    // 3. Subscribe to Realtime notes if Supabase is active
+    const unsubscribe = subscribeToRealtimeNotes((newNote) => {
+      if (mounted) {
+        setPinnedNotes((prev) => {
+          // Avoid duplicate note if already added locally
+          if (prev.some((n) => n.id === newNote.id || (n.text === newNote.text && n.author === newNote.author))) {
+            return prev
+          }
+          sounds.playChime(880, 0.3)
+          return [newNote, ...prev]
+        })
+      }
+    })
+
+    return () => {
+      mounted = false
+      unsubscribe()
     }
   }, [])
 
@@ -73,7 +66,9 @@ export function TactileWorkbench() {
     sounds.playFanfare()
     setVisitorCount((c) => {
       const updated = c + 1
-      localStorage.setItem('cutobot_visitors', String(updated))
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('cutobot_visitors', String(updated))
+      }
       return updated
     })
     setHasLiked(true)
@@ -89,31 +84,32 @@ export function TactileWorkbench() {
     })
   }
 
-  const handleAddNote = (e: React.FormEvent) => {
+  const handleAddNote = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!textInput.trim()) return
+    if (!textInput.trim() || isSubmitting) return
 
+    setIsSubmitting(true)
     sounds.playClick(900)
-    const newNote: PinnedNote = {
-      id: String(Date.now()),
+
+    const notePayload = {
       author: authorInput.trim() || 'Anonymous Tinker',
       text: textInput.trim(),
       color: selectedColor,
       rotation: (Math.random() - 0.5) * 4,
-      timestamp: 'Just now',
     }
 
-    const updated = [newNote, ...pinnedNotes]
-    setPinnedNotes(updated)
-    localStorage.setItem('cutobot_guestbook', JSON.stringify(updated))
+    // Insert to Supabase (or fallback to local storage)
+    const savedNote = await insertStickyNote(notePayload)
 
+    setPinnedNotes((prev) => [savedNote, ...prev.filter((n) => n.id !== savedNote.id)])
     setTextInput('')
     setAuthorInput('')
+    setIsSubmitting(false)
 
     confetti({
-      particleCount: 25,
-      spread: 50,
-      colors: ['#00f0b5', '#f59e0b'],
+      particleCount: 30,
+      spread: 60,
+      colors: ['#00f0b5', '#f59e0b', '#ec4899'],
     })
   }
 
@@ -128,7 +124,7 @@ export function TactileWorkbench() {
           className="inline-flex items-center gap-2 bg-[#fef08a] border-2 border-[#854d0e] px-3.5 py-1 rounded-full text-xs font-mono font-bold text-[#854d0e] shadow-[2px_2px_0px_#854d0e] mb-3"
         >
           <Pin className="w-3.5 h-3.5 text-[#d97706]" />
-          <span>Tactile Workbench • Sweet-Tape Inspired</span>
+          <span>Tactile Workbench • Sweet-Tape & Database</span>
         </motion.div>
 
         <motion.h2
@@ -144,6 +140,22 @@ export function TactileWorkbench() {
         <p className="text-sm sm:text-base text-[#5c4033] font-mono mt-1 max-w-xl mx-auto">
           Leave a sweet-tape note for Bolt and watch live workshop visitors tick up in real time!
         </p>
+
+        {/* Database Live Connection Status Badge */}
+        <div className="mt-3 inline-flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-mono font-semibold">
+          {isSupabaseConfigured ? (
+            <div className="inline-flex items-center gap-1.5 text-emerald-700 bg-emerald-50 border-emerald-300">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <Database className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Supabase Postgres Live • Realtime Synchronized</span>
+            </div>
+          ) : (
+            <div className="inline-flex items-center gap-1.5 text-amber-800 bg-amber-50 border-amber-300">
+              <Radio className="w-3.5 h-3.5 text-amber-600 animate-spin" />
+              <span>Offline/Demo Mode (Ready for Supabase credentials)</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* TOP ROW: LIVE VISITOR COUNTER & STICKER DECK */}
@@ -166,7 +178,12 @@ export function TactileWorkbench() {
               <span className="text-xs font-mono text-[#00f0b5] uppercase tracking-widest flex items-center gap-1.5">
                 <Users className="w-4 h-4" /> Live Workshop Visitors
               </span>
-              <span className="w-2.5 h-2.5 rounded-full bg-[#10b981] animate-ping" />
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[#10b981] animate-ping" />
+                <span className="text-[10px] font-mono text-emerald-400">
+                  {isSupabaseConfigured ? 'Global Postgres' : 'Live Counter'}
+                </span>
+              </div>
             </div>
 
             {/* Retro Number Tumbler */}
@@ -196,7 +213,7 @@ export function TactileWorkbench() {
             </span>
             <button
               onClick={handleGiveHighFive}
-              className="px-4 py-2 bg-[#f43f5e] hover:bg-[#e11d48] text-white border-2 border-[#881337] rounded-lg font-mono text-xs font-bold uppercase shadow-[2px_2px_0px_#881337] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none flex items-center gap-1.5 transition-all"
+              className="px-4 py-2 bg-[#f43f5e] hover:bg-[#e11d48] text-white border-2 border-[#881337] rounded-lg font-mono text-xs font-bold uppercase shadow-[2px_2px_0px_#881337] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none flex items-center gap-1.5 transition-all cursor-pointer"
             >
               <Heart className="w-3.5 h-3.5 fill-current" />
               <span>High-Five (+1)</span>
@@ -253,7 +270,7 @@ export function TactileWorkbench() {
               Tape a Note to Bolt's Board
             </h3>
             <p className="text-xs text-[#5c4033]/70 font-mono mb-4">
-              Write a message or cheer for the baby robot!
+              Write a message or cheer for the baby robot! {isSupabaseConfigured && 'Synced globally in real time.'}
             </p>
 
             <form onSubmit={handleAddNote} className="space-y-3">
@@ -300,7 +317,7 @@ export function TactileWorkbench() {
                         sounds.playClick(900)
                         setSelectedColor(c)
                       }}
-                      className={`w-7 h-7 rounded border-2 border-[#5c4033] transition-transform ${
+                      className={`w-7 h-7 rounded border-2 border-[#5c4033] transition-transform cursor-pointer ${
                         c === 'yellow'
                           ? 'bg-[#fef08a]'
                           : c === 'mint'
@@ -316,16 +333,17 @@ export function TactileWorkbench() {
 
               <button
                 type="submit"
-                className="w-full py-2 bg-[#00f0b5] hover:bg-[#00d8a3] text-[#2b1d14] font-mono text-xs font-bold uppercase rounded-lg border-2 border-[#5c4033] shadow-[3px_3px_0px_#5c4033] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none flex items-center justify-center gap-1.5 transition-all mt-2"
+                disabled={isSubmitting}
+                className="w-full py-2 bg-[#00f0b5] hover:bg-[#00d8a3] text-[#2b1d14] font-mono text-xs font-bold uppercase rounded-lg border-2 border-[#5c4033] shadow-[3px_3px_0px_#5c4033] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none flex items-center justify-center gap-1.5 transition-all mt-2 cursor-pointer disabled:opacity-50"
               >
                 <Pin className="w-3.5 h-3.5" />
-                <span>Tape Note to Board</span>
+                <span>{isSubmitting ? 'Taping...' : 'Tape Note to Board'}</span>
               </button>
             </form>
           </div>
 
           {/* Pegboard Pinned Sticky Notes Grid */}
-          <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto p-1">
             {pinnedNotes.map((note) => (
               <StickyNote
                 key={note.id}
