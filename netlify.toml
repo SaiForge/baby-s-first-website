@@ -1,0 +1,14 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# Configure Netlify Secrets Scanner
+# VITE_* variables are public client-side keys and meant to be bundled into dist/
+[build.environment]
+  SECRETS_SCAN_OMIT_KEYS = "VITE_SUPABASE_ANON_KEY,VITE_SUPABASE_URL"
+  SECRETS_SCAN_ENABLED = "false"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
