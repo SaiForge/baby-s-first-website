@@ -24,44 +24,20 @@ export interface DbStickyNote {
   timestamp?: string
 }
 
-const DEFAULT_NOTES: DbStickyNote[] = [
-  {
-    id: 'n1',
-    author: 'Ada Lovelace Fan',
-    text: 'Unit-B04 is the cutest mechanical baby on the entire web! Keep tinkering! 🤖✨',
-    color: 'yellow',
-    rotation: -2,
-    timestamp: 'Oct 18',
-  },
-  {
-    id: 'n2',
-    author: 'CircuitMouse',
-    text: 'Squeak! I brought an extra 330-ohm resistor for your backpack dock!',
-    color: 'mint',
-    rotation: 1.5,
-    timestamp: 'Oct 18',
-  },
-  {
-    id: 'n3',
-    author: 'haX.baby Judge',
-    text: 'Top tier tactile feedback & Web Audio chimes! The rattle physics are pure joy.',
-    color: 'pink',
-    rotation: -1,
-    timestamp: 'Oct 18',
-  },
-]
+// Start with 0 default notes — only genuine user-created notes appear!
+const DEFAULT_NOTES: DbStickyNote[] = []
 
 /**
- * Fetch and increment the global view count.
- * If Supabase is connected, calls the atomic increment_views RPC.
+ * Fetch and increment the global view count starting from 0.
+ * If Supabase is connected, calls the atomic increment_views RPC or direct table increment.
  * Otherwise falls back to localStorage.
  */
 export async function getAndIncrementViewCount(): Promise<number> {
   const fallbackCount = () => {
-    if (typeof window === 'undefined') return 4281
-    const saved = localStorage.getItem('cutobot_visitors')
-    const count = saved ? parseInt(saved, 10) + 1 : 4282
-    localStorage.setItem('cutobot_visitors', String(count))
+    if (typeof window === 'undefined') return 1
+    const saved = localStorage.getItem('cutobot_visitors_v2')
+    const count = saved ? parseInt(saved, 10) + 1 : 1
+    localStorage.setItem('cutobot_visitors_v2', String(count))
     return count
   }
 
@@ -70,27 +46,34 @@ export async function getAndIncrementViewCount(): Promise<number> {
   }
 
   try {
-    // Call atomic RPC increment_views
+    // 1. Try atomic RPC increment_views
     const { data, error } = await supabase.rpc('increment_views')
-    if (error || data === null) {
-      // Fallback: try direct select & update from site_stats table
-      const { data: stats } = await supabase
-        .from('site_stats')
-        .select('view_count')
-        .eq('id', 'global')
-        .single()
-
-      if (stats) {
-        const newCount = (stats.view_count || 4281) + 1
-        await supabase
-          .from('site_stats')
-          .update({ view_count: newCount, updated_at: new Date().toISOString() })
-          .eq('id', 'global')
-        return newCount
-      }
-      return fallbackCount()
+    if (!error && data !== null) {
+      return Number(data)
     }
-    return Number(data)
+
+    // 2. Fallback: try direct select & increment from site_stats table
+    const { data: stats } = await supabase
+      .from('site_stats')
+      .select('view_count')
+      .eq('id', 'global')
+      .single()
+
+    if (stats) {
+      const current = typeof stats.view_count === 'number' ? stats.view_count : 0
+      const newCount = current + 1
+      await supabase
+        .from('site_stats')
+        .update({ view_count: newCount, updated_at: new Date().toISOString() })
+        .eq('id', 'global')
+      return newCount
+    } else {
+      // Create initial row with 1
+      await supabase
+        .from('site_stats')
+        .insert({ id: 'global', view_count: 1, high_fives: 0 })
+      return 1
+    }
   } catch (err) {
     console.warn('Supabase view count error, falling back to local:', err)
     return fallbackCount()
@@ -99,17 +82,18 @@ export async function getAndIncrementViewCount(): Promise<number> {
 
 /**
  * Fetch all persistent sticky notes from Supabase or localStorage.
+ * Starts with 0 notes.
  */
 export async function fetchStickyNotes(): Promise<DbStickyNote[]> {
   const fallbackNotes = () => {
     if (typeof window === 'undefined') return DEFAULT_NOTES
-    const saved = localStorage.getItem('cutobot_guestbook')
+    const saved = localStorage.getItem('cutobot_guestbook_v2')
     if (saved) {
       try {
         const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed
+        if (Array.isArray(parsed)) return parsed
       } catch {
-        // use defaults
+        // use empty
       }
     }
     return DEFAULT_NOTES
@@ -126,7 +110,7 @@ export async function fetchStickyNotes(): Promise<DbStickyNote[]> {
       .order('created_at', { ascending: false })
       .limit(50)
 
-    if (error || !data || data.length === 0) {
+    if (error || !data) {
       return fallbackNotes()
     }
 
@@ -157,14 +141,14 @@ export async function insertStickyNote(note: Omit<DbStickyNote, 'id'>): Promise<
   }
 
   if (typeof window !== 'undefined') {
-    const existing = localStorage.getItem('cutobot_guestbook')
+    const existing = localStorage.getItem('cutobot_guestbook_v2')
     let list: DbStickyNote[] = []
     try {
       list = existing ? JSON.parse(existing) : []
     } catch {
       list = []
     }
-    localStorage.setItem('cutobot_guestbook', JSON.stringify([localNote, ...list]))
+    localStorage.setItem('cutobot_guestbook_v2', JSON.stringify([localNote, ...list]))
   }
 
   if (!supabase) {

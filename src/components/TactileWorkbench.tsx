@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { sounds } from '../audio/soundEffects'
 import { StickyNote } from './StickyNote'
-import { Heart, Users, Pin, Stamp, Database, Radio } from 'lucide-react'
+import { Heart, Users, Pin, Stamp, Database, Radio, Sparkles } from 'lucide-react'
 import confetti from 'canvas-confetti'
 import {
   isSupabaseConfigured,
+  supabase,
   getAndIncrementViewCount,
   fetchStickyNotes,
   insertStickyNote,
@@ -14,7 +15,7 @@ import {
 } from '../lib/supabase'
 
 export function TactileWorkbench() {
-  const [visitorCount, setVisitorCount] = useState(4281)
+  const [visitorCount, setVisitorCount] = useState(0)
   const [hasLiked, setHasLiked] = useState(false)
   const [pinnedNotes, setPinnedNotes] = useState<DbStickyNote[]>([])
   const [authorInput, setAuthorInput] = useState('')
@@ -22,7 +23,7 @@ export function TactileWorkbench() {
   const [selectedColor, setSelectedColor] = useState<'cream' | 'yellow' | 'pink' | 'mint'>('yellow')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Initialize view count and load persistent notes
+  // Initialize view count and load persistent notes starting from 0
   useEffect(() => {
     let mounted = true
 
@@ -67,11 +68,26 @@ export function TactileWorkbench() {
     setVisitorCount((c) => {
       const updated = c + 1
       if (typeof window !== 'undefined') {
-        localStorage.setItem('cutobot_visitors', String(updated))
+        localStorage.setItem('cutobot_visitors_v2', String(updated))
       }
       return updated
     })
     setHasLiked(true)
+
+    if (isSupabaseConfigured && supabase) {
+      const sb = supabase
+      sb.from('site_stats')
+        .select('high_fives')
+        .eq('id', 'global')
+        .single()
+        .then(({ data }) => {
+          if (data) {
+            sb.from('site_stats')
+              .update({ high_fives: (Number(data.high_fives) || 0) + 1 })
+              .eq('id', 'global')
+          }
+        })
+    }
 
     confetti({
       particleCount: 50,
@@ -343,24 +359,43 @@ export function TactileWorkbench() {
           </div>
 
           {/* Pegboard Pinned Sticky Notes Grid */}
-          <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto p-1">
-            {pinnedNotes.map((note) => (
-              <StickyNote
-                key={note.id}
-                title={note.author}
-                color={note.color}
-                rotation={note.rotation}
-                tapeColor="kraft"
-                className="transition-transform hover:scale-103"
-              >
-                <p className="font-hand text-lg leading-tight text-[#2b1d14]">
-                  "{note.text}"
-                </p>
-                <div className="mt-2 text-[10px] font-mono text-[#5c4033]/60 text-right">
-                  {note.timestamp}
+          <div className="lg:col-span-7">
+            {pinnedNotes.length === 0 ? (
+              <div className="h-full min-h-[220px] bg-[#fffaf3]/70 border-2 border-dashed border-[#5c4033]/40 rounded-2xl p-8 flex flex-col items-center justify-center text-center">
+                <div className="w-12 h-12 rounded-full bg-[#fef08a] border-2 border-[#5c4033] flex items-center justify-center mb-3 shadow-[2px_2px_0px_#5c4033]">
+                  <Sparkles className="w-6 h-6 text-[#854d0e]" />
                 </div>
-              </StickyNote>
-            ))}
+                <h4 className="font-extrabold text-[#2b1d14] text-base mb-1">
+                  Pegboard is Fresh & Clean!
+                </h4>
+                <p className="text-xs text-[#5c4033] font-mono max-w-xs mb-3">
+                  0 notes taped so far. Be the very first human to tape a note on Bolt's workbench!
+                </p>
+                <span className="text-[10px] font-mono font-bold bg-[#dcfce7] text-[#15803d] border border-[#86efac] px-3 py-1 rounded-full shadow-xs">
+                  ✨ 0 Notes • Waiting for your spark
+                </span>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto p-1">
+                {pinnedNotes.map((note) => (
+                  <StickyNote
+                    key={note.id}
+                    title={note.author}
+                    color={note.color}
+                    rotation={note.rotation}
+                    tapeColor="kraft"
+                    className="transition-transform hover:scale-103"
+                  >
+                    <p className="font-hand text-lg leading-tight text-[#2b1d14]">
+                      "{note.text}"
+                    </p>
+                    <div className="mt-2 text-[10px] font-mono text-[#5c4033]/60 text-right">
+                      {note.timestamp}
+                    </div>
+                  </StickyNote>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

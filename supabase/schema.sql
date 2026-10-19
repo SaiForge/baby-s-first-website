@@ -16,15 +16,18 @@ CREATE TABLE IF NOT EXISTS public.sticky_notes (
 -- 2. Create table for site statistics (global visitor hit counter)
 CREATE TABLE IF NOT EXISTS public.site_stats (
     id TEXT PRIMARY KEY,
-    view_count BIGINT NOT NULL DEFAULT 4281,
-    high_fives BIGINT NOT NULL DEFAULT 142,
+    view_count BIGINT NOT NULL DEFAULT 0,
+    high_fives BIGINT NOT NULL DEFAULT 0,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
--- Seed initial global counter if not exists
+-- Reset / initialize global counter to 0
 INSERT INTO public.site_stats (id, view_count, high_fives)
-VALUES ('global', 4281, 142)
-ON CONFLICT (id) DO NOTHING;
+VALUES ('global', 0, 0)
+ON CONFLICT (id) DO UPDATE SET view_count = 0, high_fives = 0;
+
+-- Clear any existing mock notes to start completely fresh at 0
+TRUNCATE TABLE public.sticky_notes;
 
 -- 3. Atomic RPC function to increment global view count concurrently
 CREATE OR REPLACE FUNCTION public.increment_views()
@@ -43,7 +46,7 @@ BEGIN
 
     IF new_count IS NULL THEN
         INSERT INTO public.site_stats (id, view_count, high_fives)
-        VALUES ('global', 4282, 142)
+        VALUES ('global', 1, 0)
         RETURNING view_count INTO new_count;
     END IF;
 
@@ -71,6 +74,12 @@ WITH CHECK (char_length(text) > 0 AND char_length(text) <= 300);
 DROP POLICY IF EXISTS "Public can view site stats" ON public.site_stats;
 CREATE POLICY "Public can view site stats"
 ON public.site_stats FOR SELECT
+TO anon, authenticated
+USING (true);
+
+DROP POLICY IF EXISTS "Public can update site stats" ON public.site_stats;
+CREATE POLICY "Public can update site stats"
+ON public.site_stats FOR UPDATE
 TO anon, authenticated
 USING (true);
 
